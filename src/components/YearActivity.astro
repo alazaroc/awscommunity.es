@@ -1,0 +1,74 @@
+---
+// Community-wide totals for the current year. Static values are a fallback; the
+// browser recomputes them from the live S3 snapshot. Never broken down per group.
+import snapshot from '../data/events.json';
+import type { EventsSnapshot } from '../lib/types';
+import { yearActivity } from '../lib/events';
+import { currentYear } from '../lib/history';
+import { t, type Locale } from '../lib/i18n';
+
+interface Props { locale?: Locale; }
+const { locale = 'es' } = Astro.props;
+const activity = yearActivity(snapshot as EventsSnapshot, currentYear());
+const snapshotUrl = import.meta.env.PUBLIC_EVENTS_SNAPSHOT_URL || '';
+const copy = {
+  eyebrow: locale === 'en' ? 'Activity in' : 'Actividad en',
+  title: t(locale, 'yearActivity'),
+  description: locale === 'en'
+    ? 'Community-wide totals based on verified events published on public event pages.'
+    : 'Totales de toda la comunidad, a partir de los eventos verificados en sus páginas públicas.',
+  held: t(locale, 'heldEvents', { year: activity.year }),
+  upcoming: t(locale, 'upcomingEvents', { year: activity.year }),
+  groups: t(locale, 'activeGroups', { year: activity.year }),
+};
+---
+
+<year-activity data-snapshot-url={snapshotUrl} data-locale={locale} data-copy={JSON.stringify(copy)}>
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">{copy.eyebrow} <span data-year>{activity.year}</span></p>
+      <h2 id="activity-heading">{copy.title}</h2>
+      <p>{copy.description}</p>
+    </div>
+  </div>
+  <div class="impact-grid" aria-live="polite">
+    <div class="impact-card"><strong data-total="held">{activity.held}</strong><p data-label="held">{copy.held}</p></div>
+    <div class="impact-card"><strong data-total="upcoming">{activity.upcoming}</strong><p data-label="upcoming">{copy.upcoming}</p></div>
+    <div class="impact-card"><strong data-total="groups">{activity.groups}</strong><p data-label="groups">{copy.groups}</p></div>
+  </div>
+</year-activity>
+
+<script>
+  import { yearActivity, type YearActivity as Totals } from '../lib/events';
+  import { currentYear } from '../lib/history';
+  import { loadSnapshot } from '../lib/snapshot-client';
+  import { t, type Locale } from '../lib/i18n';
+
+  type TotalKey = Exclude<keyof Totals, 'year'>;
+
+  class YearActivityElement extends HTMLElement {
+    connectedCallback() {
+      const url = this.dataset.snapshotUrl;
+      if (!url) return;
+      const locale: Locale = this.dataset.locale === 'en' ? 'en' : 'es';
+      loadSnapshot(url).then((snapshot) => {
+        if (!snapshot) return;
+        const activity = yearActivity(snapshot, currentYear());
+        for (const node of this.querySelectorAll<HTMLElement>('[data-year]')) node.textContent = String(activity.year);
+        for (const node of this.querySelectorAll<HTMLElement>('[data-total]')) {
+          node.textContent = String(activity[node.dataset.total as TotalKey]);
+        }
+        const labels: Record<TotalKey, string> = {
+          held: t(locale, 'heldEvents', { year: activity.year }),
+          upcoming: t(locale, 'upcomingEvents', { year: activity.year }),
+          groups: t(locale, 'activeGroups', { year: activity.year }),
+        };
+        for (const node of this.querySelectorAll<HTMLElement>('[data-label]')) {
+          const key = node.dataset.label as TotalKey;
+          node.textContent = labels[key];
+        }
+      });
+    }
+  }
+  if (!customElements.get('year-activity')) customElements.define('year-activity', YearActivityElement);
+</script>

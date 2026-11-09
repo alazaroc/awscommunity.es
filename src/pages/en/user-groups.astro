@@ -1,0 +1,116 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SpainMap from '../../components/SpainMap.astro';
+import { userGroups } from '../../../config/user-groups';
+import snapshot from '../../data/events.json';
+import type { CommunityEvent, EventsSnapshot } from '../../lib/types';
+import { upcomingEvents, upcomingGroupIds, freshlyDiscoveredGroupIds } from '../../lib/events';
+import { groupDescription, localizedPath, t } from '../../lib/i18n';
+
+const snapshotUrl = import.meta.env.PUBLIC_EVENTS_SNAPSHOT_URL || '';
+const activeGroupIds = upcomingGroupIds(snapshot as EventsSnapshot);
+const freshGroupIds = freshlyDiscoveredGroupIds(snapshot as EventsSnapshot);
+const upcomingByGroup = upcomingEvents(snapshot as EventsSnapshot)
+  .reduce<Record<string, CommunityEvent[]>>((events, event) => {
+    (events[event.userGroupId] ??= []).push(event);
+    return events;
+  }, {});
+---
+
+<BaseLayout locale="en" title="AWS User Groups" description="Find Spain’s local AWS User Groups and their upcoming events.">
+  <header class="page-header">
+    <div class="container groups-showcase">
+      <div>
+        <p class="eyebrow">Find your local community</p>
+        <h1>{userGroups.length} User Groups. One community.</h1>
+        <p>Open groups organised by volunteers to learn, share experiences and connect near you.</p>
+      </div>
+      <SpainMap id="user-groups-map" locale="en" activeGroupIds={activeGroupIds} freshGroupIds={freshGroupIds} />
+    </div>
+  </header>
+  <section id="groups-directory" class="section section-soft" style="padding-top:3rem" data-snapshot-url={snapshotUrl}>
+    <div class="container groups-grid">
+      {userGroups.map((group) => {
+        const location = group.city === group.region ? group.city : `${group.city}, ${group.region}`;
+        const description = groupDescription(group.id, 'en', group.description ?? `Local AWS community in ${location}.`);
+        return (
+          <article class="group-card" id={group.id}>
+            <span class="group-selected-label">Active group</span>
+            <a class="group-map-return" href="#user-groups-map">{t('en', 'mapBack')}</a>
+            <p class="group-region">{group.region}</p>
+            <h2><a href={`#${group.id}`}>{group.name}</a></h2>
+            <p class="group-location">{group.city}</p>
+            <p class="group-description">{description}</p>
+            <details class="group-details">
+              <summary>Activity and contact</summary>
+              <div class="group-details-content">
+                <div class="group-events-note" data-group-events={group.id}>
+                  {upcomingByGroup[group.id]?.length ? (
+                    <>
+                      <strong>Upcoming events</strong>
+                      {upcomingByGroup[group.id].slice(0, 2).map((event) => (
+                        <a href={event.url} target="_blank" rel="noopener noreferrer">{event.title} ↗</a>
+                      ))}
+                    </>
+                  ) : 'No upcoming events announced'}
+                </div>
+                {group.organizers?.length && (
+                  <div class="group-meta-block">
+                    <strong>Organised by</strong>
+                    <ul>{group.organizers.map((organizer) => <li>{organizer.url ? <a href={organizer.url} target="_blank" rel="noopener noreferrer">{organizer.name} ↗</a> : organizer.name}</li>)}</ul>
+                  </div>
+                )}
+                {group.contact && (
+                  <div class="group-meta-block"><strong>Contact</strong><a href={group.contact.url}>{group.contact.label}</a></div>
+                )}
+              </div>
+            </details>
+            <div class="group-links">
+              <a href={localizedPath('en', `/user-groups/${group.id}/`)}>View events and activity →</a>
+              <a href={group.website} target="_blank" rel="noopener noreferrer">Official website ↗</a>
+              {group.meetupUrl && <a href={group.meetupUrl} target="_blank" rel="noopener noreferrer">Meetup ↗</a>}
+              {Object.entries(group.socialLinks ?? {}).map(([network, url]) => <a href={url} target="_blank" rel="noopener noreferrer">{network}</a>)}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  </section>
+  <script>
+    import { parseEventsSnapshot, upcomingEvents } from '../../lib/events';
+    const syncActiveGroup = () => {
+      const activeId = decodeURIComponent(window.location.hash.slice(1));
+      for (const node of document.querySelectorAll<SVGAElement>('.map-node[data-group-id]')) {
+        const isActive = Boolean(activeId) && node.dataset.groupId === activeId;
+        node.classList.toggle('is-active', isActive);
+        if (isActive) node.setAttribute('aria-current', 'location'); else node.removeAttribute('aria-current');
+      }
+    };
+    syncActiveGroup();
+    window.addEventListener('hashchange', syncActiveGroup);
+    const directory = document.querySelector<HTMLElement>('#groups-directory');
+    const url = directory?.dataset.snapshotUrl;
+    if (directory && url) {
+      fetch(url, { headers: { accept: 'application/json' } })
+        .then((response) => response.ok ? response.json() : Promise.reject())
+        .then((value) => {
+          const snapshot = parseEventsSnapshot(value);
+          if (!snapshot) return;
+          const events = upcomingEvents(snapshot);
+          for (const note of directory.querySelectorAll<HTMLElement>('[data-group-events]')) {
+            const groupEvents = events.filter((event) => event.userGroupId === note.dataset.groupEvents).slice(0, 2);
+            note.replaceChildren();
+            if (!groupEvents.length) { note.append('No upcoming events announced'); continue; }
+            const heading = document.createElement('strong');
+            heading.textContent = 'Upcoming events';
+            note.append(heading);
+            for (const event of groupEvents) {
+              const link = document.createElement('a');
+              link.href = event.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = `${event.title} ↗`;
+              note.append(link);
+            }
+          }
+        }).catch(() => {});
+    }
+  </script>
+</BaseLayout>

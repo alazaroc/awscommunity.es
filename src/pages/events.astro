@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import EventsList from '../components/EventsList.astro';
+import RecentEvents from '../components/RecentEvents.astro';
+import YearActivity from '../components/YearActivity.astro';
+import { TIMELINE_MONTHS } from '../lib/history';
+import snapshot from '../data/events.json';
+import type { EventsSnapshot } from '../lib/types';
+import { upcomingEvents } from '../lib/events';
+import { upcomingEventsSchema } from '../lib/seo';
+
+const schema = upcomingEventsSchema(upcomingEvents(snapshot as EventsSnapshot), 'es', Astro.site ?? new URL(Astro.url.origin));
+---
+
+<BaseLayout title="Eventos" description="Próximos eventos y actividad reciente de los AWS User Groups y de la comunidad AWS en España." schema={schema}>
+  <header class="page-header">
+    <div class="container">
+      <p class="eyebrow">Actividad durante todo el año</p>
+      <h1>Eventos de la comunidad</h1>
+      <p>Una agenda cronológica de meetups, charlas y encuentros organizados por los AWS User Groups españoles.</p>
+    </div>
+  </header>
+  <section class="section section-soft" style="padding-top:3rem" aria-label="Próximos eventos">
+    <div class="container">
+      <EventsList variant="timeline" enableFilters />
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="activity-heading">
+    <div class="container">
+      <YearActivity />
+    </div>
+  </section>
+
+  <section id="recent-events" class="section section-soft" aria-labelledby="timeline-heading">
+    <div class="container">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Últimos {TIMELINE_MONTHS} meses</p>
+          <h2 id="timeline-heading">Eventos recientes</h2>
+          <p>El historial completo de cada grupo está en su página, desde <a class="text-link" href="/user-groups/">User Groups</a>.</p>
+        </div>
+      </div>
+      <RecentEvents />
+    </div>
+  </section>
+</BaseLayout>

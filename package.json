@@ -1,0 +1,51 @@
+{
+  "name": "awscommunity.es",
+  "version": "0.1.0",
+  "description": "AWS Community Spain: events and User Groups of the AWS community in Spain",
+  "author": "Alejandro Lázaro Chueca <https://github.com/alazaroc>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alazaroc/awscommunity.es.git"
+  },
+  "homepage": "https://awscommunity.es",
+  "bugs": {
+    "url": "https://github.com/alazaroc/awscommunity.es/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "events:download": "node scripts/download-snapshot.mjs",
+    "events:admin": "node scripts/events-admin.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:sources": "LIVE_SOURCE_TESTS=1 vitest run tests/live-sources.test.ts",
+    "backend:build": "sam build --template-file infrastructure/template.yaml",
+    "backend:deploy": "bash scripts/deploy.sh backend",
+    "deploy": "bash scripts/deploy.sh all"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.922.0",
+    "@aws-sdk/client-s3": "^3.922.0",
+    "@aws-sdk/client-sns": "^3.922.0",
+    "@aws-sdk/lib-dynamodb": "^3.922.0",
+    "astro": "^7.4.4",
+    "fast-xml-parser": "^5.3.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.5",
+    "@playwright/test": "^1.64.1",
+    "@types/aws-lambda": "^8.10.158",
+    "@types/node": "^24.10.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.6"
+  }
+}

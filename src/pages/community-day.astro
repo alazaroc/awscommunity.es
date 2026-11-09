@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CommunityDayPromo from '../components/CommunityDayPromo.astro';
+import { communityDayEditions } from '../../config/community-day';
+---
+
+<BaseLayout title="AWS Community Day Spain" description="Índice permanente de las ediciones de AWS Community Day Spain.">
+  <header class="page-header">
+    <div class="container">
+      <p class="eyebrow">Nuestro encuentro anual</p>
+      <h1>AWS Community Day Spain</h1>
+      <p>Una conferencia técnica de un día, organizada por personas voluntarias y liderada por la comunidad. Cada edición cuenta con su propia web independiente.</p>
+    </div>
+  </header>
+  <CommunityDayPromo variant="block" showCta={false} />
+  <section class="section section-soft" aria-labelledby="history-title">
+    <div class="container">
+      <div class="section-heading"><div><p class="eyebrow">Archivo desde 2023</p><h2 id="history-title">Ediciones anteriores</h2><p>Revive cada edición en su web independiente.</p></div></div>
+      <div class="editions-list">
+        {communityDayEditions.map((edition, index) => (
+          <a class="edition-row" href={edition.url} target="_blank" rel="noopener noreferrer">
+            <strong>{edition.year}</strong>
+            <span>{edition.location}{index === 0 ? ' · Última edición' : ''}</span>
+            <b>Visitar web ↗</b>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

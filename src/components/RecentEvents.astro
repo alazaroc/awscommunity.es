@@ -1,0 +1,122 @@
+---
+// Events held in the last months across all groups, by month. Static HTML is a
+// fallback; the browser re-renders it from the live S3 snapshot.
+import snapshot from '../data/events.json';
+import { userGroups } from '../../config/user-groups';
+import type { EventsSnapshot } from '../lib/types';
+import { groupByMonth, pastEvents } from '../lib/events';
+import { dayOfMonth, timelineStart } from '../lib/history';
+import { localizedPath, t, type Locale } from '../lib/i18n';
+
+interface Props { locale?: Locale; }
+const { locale = 'es' } = Astro.props;
+const now = new Date();
+const months = groupByMonth(pastEvents(snapshot as EventsSnapshot, now, { since: timelineStart(now) }), locale);
+const groupNames = Object.fromEntries(userGroups.map((group) => [group.id, group.name]));
+const snapshotUrl = import.meta.env.PUBLIC_EVENTS_SNAPSHOT_URL || '';
+const copy = { noRecent: t(locale, 'noRecent') };
+---
+
+<recent-events data-snapshot-url={snapshotUrl} data-groups={JSON.stringify(groupNames)} data-locale={locale} data-copy={JSON.stringify(copy)}>
+  <div class="history-timeline" aria-live="polite">
+    {months.length === 0 ? (
+      <div class="empty-state"><span aria-hidden="true">○</span><p><strong>{copy.noRecent}</strong></p></div>
+    ) : months.map((month) => (
+      <section class="history-month" aria-label={month.label}>
+        <h3 class="events-month">{month.label}</h3>
+        <ol>
+          {month.events.map((event) => (
+            <li>
+              <time class="history-day" datetime={event.startDate}>{dayOfMonth(event, locale)}</time>
+              <div>
+                <a class="history-title" href={event.url} target="_blank" rel="noopener noreferrer">{event.title} <span aria-hidden="true">↗</span></a>
+                <p class="history-meta"><a href={localizedPath(locale, `/user-groups/${event.userGroupId}/`)}>{groupNames[event.userGroupId] ?? event.userGroupId}</a> · {event.city}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))}
+  </div>
+</recent-events>
+
+<script>
+  import { groupByMonth, pastEvents } from '../lib/events';
+  import { dayOfMonth, timelineStart } from '../lib/history';
+  import { loadSnapshot } from '../lib/snapshot-client';
+  import { localizedPath, type Locale } from '../lib/i18n';
+  import type { CommunityEvent } from '../lib/types';
+
+  function eventItem(event: CommunityEvent, groupName: string, locale: Locale): HTMLLIElement {
+    const item = document.createElement('li');
+    const time = document.createElement('time');
+    time.className = 'history-day';
+    time.dateTime = event.startDate;
+    time.textContent = dayOfMonth(event, locale);
+
+    const body = document.createElement('div');
+    const title = document.createElement('a');
+    title.className = 'history-title';
+    title.href = event.url;
+    title.target = '_blank';
+    title.rel = 'noopener noreferrer';
+    const arrow = document.createElement('span');
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '↗';
+    title.append(`${event.title} `, arrow);
+
+    const meta = document.createElement('p');
+    meta.className = 'history-meta';
+    const group = document.createElement('a');
+    group.href = localizedPath(locale, `/user-groups/${encodeURIComponent(event.userGroupId)}/`);
+    group.textContent = groupName;
+    meta.append(group, ` · ${event.city}`);
+
+    body.append(title, meta);
+    item.append(time, body);
+    return item;
+  }
+
+  function emptyState(text: string): HTMLElement {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '○';
+    const paragraph = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = text;
+    paragraph.append(strong);
+    empty.append(icon, paragraph);
+    return empty;
+  }
+
+  class RecentEvents extends HTMLElement {
+    connectedCallback() {
+      const url = this.dataset.snapshotUrl;
+      if (!url) return;
+      const locale: Locale = this.dataset.locale === 'en' ? 'en' : 'es';
+      const groups = JSON.parse(this.dataset.groups ?? '{}') as Record<string, string>;
+      const copy = JSON.parse(this.dataset.copy ?? '{}') as { noRecent: string };
+      loadSnapshot(url).then((snapshot) => {
+        if (!snapshot) return;
+        const now = new Date();
+        const months = groupByMonth(pastEvents(snapshot, now, { since: timelineStart(now) }), locale);
+        const sections = months.map((month) => {
+          const section = document.createElement('section');
+          section.className = 'history-month';
+          section.setAttribute('aria-label', month.label);
+          const heading = document.createElement('h3');
+          heading.className = 'events-month';
+          heading.textContent = month.label;
+          const list = document.createElement('ol');
+          list.append(...month.events.map((event) => eventItem(event, groups[event.userGroupId] ?? event.userGroupId, locale)));
+          section.append(heading, list);
+          return section;
+        });
+        this.querySelector('.history-timeline')?.replaceChildren(...(sections.length ? sections : [emptyState(copy.noRecent)]));
+      });
+    }
+  }
+  if (!customElements.get('recent-events')) customElements.define('recent-events', RecentEvents);
+</script>

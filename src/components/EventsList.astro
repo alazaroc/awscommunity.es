@@ -1,0 +1,404 @@
+---
+import snapshot from '../data/events.json';
+import { userGroups } from '../../config/user-groups';
+import type { CommunityEvent, EventsSnapshot } from '../lib/types';
+import { eventMonthKey, freshlyDiscoveredGroupIds, upcomingEvents } from '../lib/events';
+import { localizedPath, localeTag, t, type Locale } from '../lib/i18n';
+
+interface Props {
+  limit?: number;
+  variant?: 'cards' | 'timeline';
+  groupId?: string;
+  locale?: Locale;
+  enableFilters?: boolean;
+}
+
+const { limit, variant = 'cards', groupId, locale = 'es', enableFilters = false } = Astro.props;
+const typedSnapshot = snapshot as EventsSnapshot;
+const availableEvents = upcomingEvents(typedSnapshot, new Date(), groupId);
+const events = typeof limit === 'number' ? availableEvents.slice(0, limit) : availableEvents;
+const groups = Object.fromEntries(userGroups.map((group) => [group.id, group.name]));
+const snapshotUrl = import.meta.env.PUBLIC_EVENTS_SNAPSHOT_URL || '';
+const freshGroupIds = new Set(freshlyDiscoveredGroupIds(typedSnapshot));
+const day = (date: string, timezone: string) => new Intl.DateTimeFormat(localeTag(locale), { day: '2-digit', timeZone: timezone }).format(new Date(date));
+const month = (date: string, timezone: string) => new Intl.DateTimeFormat(localeTag(locale), { month: 'short', timeZone: timezone }).format(new Date(date)).replace('.', '').toUpperCase();
+const time = (date: string, timezone: string) => new Intl.DateTimeFormat(localeTag(locale), { hour: '2-digit', minute: '2-digit', timeZone: timezone }).format(new Date(date));
+const monthHeading = (date: string, timezone: string) => new Intl.DateTimeFormat(localeTag(locale), { month: 'long', year: 'numeric', timeZone: timezone }).format(new Date(date));
+const sourceLabel = (event: CommunityEvent) => event.source.startsWith('meetup-') ? t(locale, 'viewMeetup') : t(locale, 'viewEvent');
+const monthOptions = [...new Map(availableEvents.map((event) => [eventMonthKey(event), monthHeading(event.startDate, event.timezone)])).entries()];
+const cityOptions = [...new Set(availableEvents.map((event) => event.city))].sort((a, b) => a.localeCompare(b, localeTag(locale)));
+const formatSnapshotDate = (date: string) => new Intl.DateTimeFormat(localeTag(locale), { dateStyle: 'medium', timeZone: 'Europe/Madrid' }).format(new Date(date));
+const copy = {
+  noUpcoming: t(locale, 'noUpcoming'),
+  returnSoon: t(locale, 'returnSoon'),
+  viewEvent: t(locale, 'viewEvent'),
+  viewMeetup: t(locale, 'viewMeetup'),
+  speakers: t(locale, 'speakers'),
+  openEvent: t(locale, 'openEvent'),
+  newlyDiscovered: t(locale, 'newlyDiscovered'),
+  filterResults: t(locale, 'filterResults'),
+  snapshotUpdated: t(locale, 'snapshotUpdated'),
+  snapshotUnavailable: t(locale, 'snapshotUnavailable'),
+  noResults: t(locale, 'noFilterResults'),
+};
+---
+
+<community-events
+  data-snapshot-url={snapshotUrl}
+  data-generated-at={typedSnapshot.generatedAt}
+  data-variant={variant}
+  data-limit={limit ?? ''}
+  data-group-id={groupId ?? ''}
+  data-locale={locale}
+  data-groups={JSON.stringify(groups)}
+  data-static-events={JSON.stringify(availableEvents)}
+  data-copy={JSON.stringify(copy)}
+>
+  {enableFilters && (
+    <form class="event-filters" data-event-filters>
+      <fieldset>
+        <legend>{t(locale, 'filters')}</legend>
+        <p class="filter-scope">{t(locale, 'upcomingScope')} <a href="#recent-events">{t(locale, 'recentActivityLink')}</a></p>
+        <label class="filter-search">
+          <span>{t(locale, 'searchEvents')}</span>
+          <input type="search" data-filter-search placeholder={t(locale, 'searchPlaceholder')} autocomplete="off" />
+        </label>
+        <label>
+          <span>{t(locale, 'filterGroup')}</span>
+          <select data-filter-group>
+            <option value="">{t(locale, 'allGroups')}</option>
+            {Object.entries(groups).filter(([id]) => availableEvents.some((event) => event.userGroupId === id)).map(([id, name]) => <option value={id}>{name}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>{t(locale, 'filterCity')}</span>
+          <select data-filter-city>
+            <option value="">{t(locale, 'allCities')}</option>
+            {cityOptions.map((city) => <option value={city}>{city}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>{t(locale, 'filterMonth')}</span>
+          <select data-filter-month>
+            <option value="">{t(locale, 'allMonths')}</option>
+            {monthOptions.map(([value, label]) => <option value={value}>{label}</option>)}
+          </select>
+        </label>
+        <button type="reset" class="filter-reset">{t(locale, 'clearFilters')}</button>
+      </fieldset>
+      <p class="filter-status" data-filter-status aria-live="polite">{t(locale, 'filterResults', { count: events.length })}</p>
+    </form>
+  )}
+  <p class="snapshot-status" data-snapshot-status>
+    {copy.snapshotUpdated}: <time datetime={typedSnapshot.generatedAt}>{formatSnapshotDate(typedSnapshot.generatedAt)}</time>
+  </p>
+  <div class:list={['events-collection', `events-${variant}`]} aria-live="polite">
+    {events.length === 0 ? (
+      <div class="empty-state">
+        <span aria-hidden="true">○</span>
+        <p><strong>{t(locale, 'noUpcoming')}</strong><br />{t(locale, 'returnSoon')}</p>
+      </div>
+    ) : events.map((event, index) => (
+      <>
+        {variant === 'timeline' && (index === 0 || monthHeading(events[index - 1].startDate, events[index - 1].timezone) !== monthHeading(event.startDate, event.timezone)) && (
+          <h2 class="events-month">{monthHeading(event.startDate, event.timezone)}</h2>
+        )}
+        <article class="event-card" data-group-id={event.userGroupId}>
+          <a class="event-media" href={event.url} target="_blank" rel="noopener noreferrer" aria-label={t(locale, 'openEvent', { title: event.title })}>
+            <span aria-hidden="true">AWS COMMUNITY SPAIN</span>
+            {event.imageUrl && <img src={event.imageUrl} alt="" width="676" height="380" loading="lazy" decoding="async" referrerpolicy="no-referrer" />}
+          </a>
+          <time class="event-date" datetime={event.startDate}><strong>{day(event.startDate, event.timezone)}</strong><span>{month(event.startDate, event.timezone)}</span></time>
+          <div class="event-details">
+            <p class="event-meta">{event.city} · {time(event.startDate, event.timezone)}</p>
+            <h3><a href={event.url} target="_blank" rel="noopener noreferrer">{event.title}</a></h3>
+            <p class="event-group"><a href={localizedPath(locale, `/user-groups/${event.userGroupId}/`)}>{groups[event.userGroupId] ?? event.userGroupId}</a></p>
+            {freshGroupIds.has(event.userGroupId) && <span class="event-fresh">{t(locale, 'newlyDiscovered')}</span>}
+            {variant === 'timeline' && event.description && <p class="event-description">{event.description}</p>}
+            {variant === 'timeline' && event.speakers?.length && (
+              <p class="event-speakers">
+                <strong>{t(locale, 'speakers')}:</strong>{' '}
+                {event.speakers.map((speaker, speakerIndex) => (
+                  <>
+                    {speakerIndex > 0 && ', '}
+                    {speaker.url
+                      ? <a href={speaker.url} target="_blank" rel="noopener noreferrer">{speaker.name}</a>
+                      : speaker.name}
+                  </>
+                ))}
+              </p>
+            )}
+            <a class="event-source-link" href={event.url} target="_blank" rel="noopener noreferrer">{sourceLabel(event)} ↗</a>
+          </div>
+          <a class="event-arrow" href={event.url} target="_blank" rel="noopener noreferrer" aria-label={t(locale, 'openEvent', { title: event.title })}><span aria-hidden="true">↗</span></a>
+        </article>
+      </>
+    ))}
+  </div>
+</community-events>
+
+<script>
+  import { eventMonthKey, filterEvents, freshlyDiscoveredGroupIds, parseEventsSnapshot, upcomingEvents } from '../lib/events';
+  import { localeTag, localizedPath, t, type Locale } from '../lib/i18n';
+  import type { CommunityEvent, EventsSnapshot } from '../lib/types';
+
+  class CommunityEvents extends HTMLElement {
+    private snapshot?: EventsSnapshot;
+    private staticSnapshot?: EventsSnapshot;
+    private groups: Record<string, string> = {};
+    private allEvents: CommunityEvent[] = [];
+    private locale: Locale = 'es';
+    private copy = { noUpcoming: '', returnSoon: '', viewEvent: '', viewMeetup: '', speakers: '', openEvent: '', newlyDiscovered: '', filterResults: '', snapshotUpdated: '', snapshotUnavailable: '', noResults: '' };
+
+    connectedCallback() {
+      this.locale = (this.dataset.locale === 'en' ? 'en' : 'es');
+      this.groups = JSON.parse(this.dataset.groups ?? '{}') as Record<string, string>;
+      this.staticSnapshot = parseEventsSnapshot({
+        generatedAt: this.dataset.generatedAt ?? '',
+        events: JSON.parse(this.dataset.staticEvents ?? '[]'),
+      });
+      this.copy = { ...this.copy, ...JSON.parse(this.dataset.copy ?? '{}') };
+      this.bindImageFallbacks();
+      this.bindFilters();
+      const url = this.dataset.snapshotUrl;
+      if (!url) return;
+      this.refresh(url).catch(() => this.setSnapshotStatus('', true));
+    }
+
+    bindImageFallbacks() {
+      for (const image of this.querySelectorAll<HTMLImageElement>('.event-media img')) {
+        image.addEventListener('error', () => image.remove(), { once: true });
+      }
+    }
+
+    bindFilters() {
+      const form = this.querySelector<HTMLFormElement>('[data-event-filters]');
+      if (!form) return;
+      form.addEventListener('change', () => this.renderFiltered());
+      form.addEventListener('input', (event) => {
+        if ((event.target as HTMLElement).matches('[data-filter-search]')) this.renderFiltered();
+      });
+      form.addEventListener('reset', () => requestAnimationFrame(() => this.renderFiltered()));
+    }
+
+    refreshFilterOptions(events: CommunityEvent[]) {
+      const form = this.querySelector<HTMLFormElement>('[data-event-filters]');
+      if (!form) return;
+      const replaceOptions = (selector: string, values: Array<[string, string]>) => {
+        const select = form.querySelector<HTMLSelectElement>(selector);
+        if (!select) return;
+        const current = select.value;
+        select.replaceChildren(new Option(selector === '[data-filter-group]' ? t(this.locale, 'allGroups') : selector === '[data-filter-city]' ? t(this.locale, 'allCities') : t(this.locale, 'allMonths'), ''));
+        for (const [value, label] of values) select.append(new Option(label, value));
+        select.value = values.some(([value]) => value === current) ? current : '';
+      };
+      const groupOptions = Object.entries(this.groups)
+        .filter(([id]) => events.some((event) => event.userGroupId === id))
+        .sort(([, a], [, b]) => a.localeCompare(b, localeTag(this.locale)));
+      const cityOptions = [...new Set(events.map((event) => event.city))]
+        .sort((a, b) => a.localeCompare(b, localeTag(this.locale)))
+        .map((city) => [city, city] as [string, string]);
+      const monthOptions = [...new Map(events.map((event) => [eventMonthKey(event), new Intl.DateTimeFormat(localeTag(this.locale), { month: 'long', year: 'numeric', timeZone: event.timezone }).format(new Date(event.startDate))])).entries()];
+      replaceOptions('[data-filter-group]', groupOptions);
+      replaceOptions('[data-filter-city]', cityOptions);
+      replaceOptions('[data-filter-month]', monthOptions);
+    }
+    async refresh(url: string) {
+      const response = await fetch(url, { headers: { accept: 'application/json' } });
+      if (!response.ok) throw new Error('snapshot request failed');
+      const snapshot = parseEventsSnapshot(await response.json());
+      if (!snapshot || snapshot.generatedAt <= (this.dataset.generatedAt ?? '')) return;
+      this.snapshot = snapshot;
+      this.dataset.generatedAt = snapshot.generatedAt;
+      window.dispatchEvent(new CustomEvent('events-snapshot-updated', { detail: snapshot }));
+      this.setSnapshotStatus(snapshot.generatedAt);
+      this.refreshFilterOptions(upcomingEvents(snapshot, new Date(), this.dataset.groupId || undefined));
+      this.renderFiltered();
+    }
+
+    renderFiltered() {
+      const source = this.snapshot ?? this.staticSnapshot;
+      if (!source) return;
+      this.allEvents = upcomingEvents(source, new Date(), this.dataset.groupId || undefined);
+      const form = this.querySelector<HTMLFormElement>('[data-event-filters]');
+      const selected = filterEvents(this.allEvents, {
+        userGroupId: form?.querySelector<HTMLSelectElement>('[data-filter-group]')?.value,
+        city: form?.querySelector<HTMLSelectElement>('[data-filter-city]')?.value,
+        month: form?.querySelector<HTMLSelectElement>('[data-filter-month]')?.value,
+        query: form?.querySelector<HTMLInputElement>('[data-filter-search]')?.value,
+        groupNames: this.groups,
+      });
+      const limit = Number(this.dataset.limit) || Infinity;
+      this.render(selected.slice(0, limit));
+      this.setStatus(selected.length ? t(this.locale, 'filterResults', { count: selected.length }) : this.copy.noResults);
+    }
+
+    setStatus(text: string) {
+      const status = this.querySelector<HTMLElement>('[data-filter-status]');
+      if (status) status.textContent = text;
+    }
+
+    setSnapshotStatus(generatedAt: string, error = false) {
+      const status = this.querySelector<HTMLElement>('[data-snapshot-status]');
+      if (!status) return;
+      if (error) {
+        status.textContent = this.copy.snapshotUnavailable;
+        return;
+      }
+      const label = document.createTextNode(`${this.copy.snapshotUpdated}: `);
+      const time = document.createElement('time');
+      time.dateTime = generatedAt;
+      time.textContent = new Intl.DateTimeFormat(localeTag(this.locale), { dateStyle: 'medium', timeZone: 'Europe/Madrid' }).format(new Date(generatedAt));
+      status.replaceChildren(label, time);
+    }
+
+    render(events: CommunityEvent[]) {
+      const collection = this.querySelector('.events-collection');
+      if (!collection) return;
+      collection.replaceChildren();
+      if (events.length === 0) {
+        const form = this.querySelector<HTMLFormElement>('[data-event-filters]');
+        const hasFilters = Boolean(form && [
+          form.querySelector<HTMLInputElement>('[data-filter-search]')?.value,
+          form.querySelector<HTMLSelectElement>('[data-filter-group]')?.value,
+          form.querySelector<HTMLSelectElement>('[data-filter-city]')?.value,
+          form.querySelector<HTMLSelectElement>('[data-filter-month]')?.value,
+        ].some(Boolean));
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        const text = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = hasFilters ? this.copy.noResults : this.copy.noUpcoming;
+        text.append(strong);
+        if (!hasFilters) text.append(document.createElement('br'), this.copy.returnSoon);
+        empty.append(text);
+        collection.append(empty);
+        return;
+      }
+      let currentMonth = '';
+      for (const event of events) {
+        if (this.dataset.variant === 'timeline') {
+          const month = new Intl.DateTimeFormat(localeTag(this.locale), { month: 'long', year: 'numeric', timeZone: event.timezone }).format(new Date(event.startDate));
+          if (month !== currentMonth) {
+            const heading = document.createElement('h2');
+            heading.className = 'events-month';
+            heading.textContent = month;
+            collection.append(heading);
+            currentMonth = month;
+          }
+        }
+        collection.append(this.createEvent(event));
+      }
+      this.bindImageFallbacks();
+    }
+
+    createEvent(event: CommunityEvent) {
+      const date = new Date(event.startDate);
+      const article = document.createElement('article');
+      article.className = 'event-card';
+      article.dataset.groupId = event.userGroupId;
+      const media = document.createElement('a');
+      media.className = 'event-media';
+      media.href = event.url;
+      media.target = '_blank';
+      media.rel = 'noopener noreferrer';
+      media.setAttribute('aria-label', this.copy.openEvent.replace('{title}', event.title));
+      const fallback = document.createElement('span');
+      fallback.textContent = 'AWS COMMUNITY SPAIN';
+      fallback.setAttribute('aria-hidden', 'true');
+      media.append(fallback);
+      if (event.imageUrl) {
+        const image = document.createElement('img');
+        image.src = event.imageUrl;
+        image.alt = '';
+        image.width = 676;
+        image.height = 380;
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.referrerPolicy = 'no-referrer';
+        media.append(image);
+      }
+
+      const dateBox = document.createElement('time');
+      dateBox.className = 'event-date';
+      dateBox.dateTime = event.startDate;
+      const day = document.createElement('strong');
+      day.textContent = new Intl.DateTimeFormat(localeTag(this.locale), { day: '2-digit', timeZone: event.timezone }).format(date);
+      const month = document.createElement('span');
+      month.textContent = new Intl.DateTimeFormat(localeTag(this.locale), { month: 'short', timeZone: event.timezone }).format(date).replace('.', '').toUpperCase();
+      dateBox.append(day, month);
+
+      const details = document.createElement('div');
+      details.className = 'event-details';
+      const meta = document.createElement('p');
+      meta.className = 'event-meta';
+      meta.textContent = `${event.city} · ${new Intl.DateTimeFormat(localeTag(this.locale), { hour: '2-digit', minute: '2-digit', timeZone: event.timezone }).format(date)}`;
+      const heading = document.createElement('h3');
+      const link = document.createElement('a');
+      link.href = event.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = event.title;
+      heading.append(link);
+      const group = document.createElement('p');
+      group.className = 'event-group';
+      const groupLink = document.createElement('a');
+      groupLink.href = localizedPath(this.locale, `/user-groups/${event.userGroupId}/`);
+      groupLink.textContent = this.groups[event.userGroupId] ?? event.userGroupId;
+      group.append(groupLink);
+      details.append(meta, heading, group);
+
+      const sourceSnapshot = this.snapshot ?? this.staticSnapshot;
+      if (sourceSnapshot && freshlyDiscoveredGroupIds(sourceSnapshot).includes(event.userGroupId)) {
+        const fresh = document.createElement('span');
+        fresh.className = 'event-fresh';
+        fresh.textContent = this.copy.newlyDiscovered;
+        details.append(fresh);
+      }
+
+      if (this.dataset.variant === 'timeline' && event.description) {
+        const description = document.createElement('p');
+        description.className = 'event-description';
+        description.textContent = event.description;
+        details.append(description);
+      }
+      if (this.dataset.variant === 'timeline' && event.speakers?.length) {
+        const speakers = document.createElement('p');
+        speakers.className = 'event-speakers';
+        const label = document.createElement('strong');
+        label.textContent = `${this.copy.speakers}: `;
+        speakers.append(label);
+        event.speakers.forEach((speaker, index) => {
+          if (index > 0) speakers.append(', ');
+          if (speaker.url) {
+            const speakerLink = document.createElement('a');
+            speakerLink.href = speaker.url;
+            speakerLink.target = '_blank';
+            speakerLink.rel = 'noopener noreferrer';
+            speakerLink.textContent = speaker.name;
+            speakers.append(speakerLink);
+          } else speakers.append(speaker.name);
+        });
+        details.append(speakers);
+      }
+      const source = document.createElement('a');
+      source.className = 'event-source-link';
+      source.href = event.url;
+      source.target = '_blank';
+      source.rel = 'noopener noreferrer';
+      source.textContent = `${event.source.startsWith('meetup-') ? this.copy.viewMeetup : this.copy.viewEvent} ↗`;
+      details.append(source);
+
+      const arrow = document.createElement('a');
+      arrow.className = 'event-arrow';
+      arrow.href = event.url;
+      arrow.target = '_blank';
+      arrow.rel = 'noopener noreferrer';
+      arrow.textContent = '↗';
+      arrow.setAttribute('aria-label', this.copy.openEvent.replace('{title}', event.title));
+      article.append(media, dateBox, details, arrow);
+      return article;
+    }
+  }
+  if (!customElements.get('community-events')) customElements.define('community-events', CommunityEvents);
+</script>

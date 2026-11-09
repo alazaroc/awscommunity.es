@@ -1,0 +1,109 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SpainMap from '../components/SpainMap.astro';
+import EventsList from '../components/EventsList.astro';
+import CommunityDayPromo from '../components/CommunityDayPromo.astro';
+import SectionNavigator from '../components/SectionNavigator.astro';
+import ThemeDivider from '../components/ThemeDivider.astro';
+import { communityDay, communityDayEditions } from '../../config/community-day';
+import { userGroups } from '../../config/user-groups';
+import { t } from '../lib/i18n';
+import { upcomingGroupIds, freshlyDiscoveredGroupIds } from '../lib/events';
+import type { EventsSnapshot } from '../lib/types';
+import snapshot from '../data/events.json';
+const groupCount = userGroups.length;
+const activeGroupIds = upcomingGroupIds(snapshot as EventsSnapshot);
+const freshGroupIds = freshlyDiscoveredGroupIds(snapshot as EventsSnapshot);
+---
+
+<BaseLayout>
+  <SectionNavigator />
+  {communityDay.enabled && communityDay.promotionMode === 'banner' && (
+    <>
+      <CommunityDayPromo variant="banner" />
+      <ThemeDivider halloweenOnly />
+    </>
+  )}
+
+  {communityDay.enabled && communityDay.promotionMode === 'hero' ? (
+    <CommunityDayPromo variant="hero" />
+  ) : (
+    <section id="home-hero" data-home-section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow">La comunidad AWS en España</p>
+          <h1 id="hero-title">Aprende. Comparte. <span>Conecta.</span></h1>
+          <p class="hero-lead">Descubre qué está pasando en la comunidad AWS de toda España y encuentra personas con las que seguir aprendiendo.</p>
+          <div class="hero-stats" aria-label="Datos de la comunidad">
+            <span>{groupCount} User Groups</span><span>+10.000 miembros</span>
+          </div>
+          <div class="hero-actions">
+            <a class="button button-primary" href="/events">Explorar próximos eventos</a>
+            <a class="button button-secondary" href="/user-groups">Encontrar mi User Group</a>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <SpainMap id="hero-map" activeGroupIds={activeGroupIds} freshGroupIds={freshGroupIds} />
+        </div>
+      </div>
+    </section>
+  )}
+
+  <ThemeDivider />
+  <section id="home-upcoming" data-home-section class="section home-section" aria-labelledby="upcoming-title">
+    <div class="container">
+      <div class="section-heading">
+        <div><p class="eyebrow">En la comunidad</p><h2 id="upcoming-title">Próximos eventos</h2><p>Meetups, charlas y encuentros organizados por comunidades locales de toda España.</p></div>
+        <a class="text-link" href="/events">Ver todos los eventos →</a>
+      </div>
+      <EventsList limit={3} variant="cards" />
+    </div>
+  </section>
+
+  <ThemeDivider />
+  <section id="home-community" data-home-section class="section section-dark home-section" aria-labelledby="groups-title">
+    <div class="container community-discovery">
+      <div class="community-discovery-content">
+        <p class="eyebrow">Cerca de ti</p>
+        <h2 id="groups-title">Una comunidad distribuida por toda España</h2>
+        <p class="community-discovery-copy">Conecta con profesionales, estudiantes y personas curiosas que comparten conocimiento de forma abierta.</p>
+        <div class="city-cloud">
+          {userGroups.map((group) => <a href={`/user-groups#${group.id}`}>{group.city}</a>)}
+        </div>
+        <a class="button button-accent" href="/user-groups">Conocer los {groupCount} User Groups</a>
+      </div>
+      <aside class="community-network-panel" aria-label={t('es', 'communityNetworkTitle')}>
+        <div class="community-network-art" aria-hidden="true">
+          <svg viewBox="0 0 420 220" role="presentation">
+            <path d="M62 151 128 78l86 71 73-108 72 86" />
+            <path d="m62 151 105-17 47 15 73-61" />
+            <path d="m128 78 86-7 73 47" />
+            <circle cx="62" cy="151" r="8" /><circle cx="128" cy="78" r="8" /><circle cx="214" cy="149" r="11" />
+            <circle cx="287" cy="41" r="8" /><circle cx="359" cy="127" r="8" /><circle cx="167" cy="134" r="6" />
+          </svg>
+        </div>
+        <p class="community-network-kicker">{t('es', 'communityNetworkTitle')}</p>
+        <p class="community-network-description">{t('es', 'communityNetworkDescription')}</p>
+        <div class="community-network-stats">
+          <span><strong>{groupCount}</strong>{t('es', 'communityNetworkCities')}</span>
+          <span><strong>10k+</strong>{t('es', 'communityNetworkMembers')}</span>
+          <span><strong>{activeGroupIds.length}</strong>{t('es', 'communityNetworkEvents')}</span>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  {communityDay.enabled && <CommunityDayPromo variant="block" showEditionLinks />}
+
+  <ThemeDivider />
+  <section id="home-impact" data-home-section class="section section-soft home-section" aria-labelledby="impact-title">
+    <div class="container">
+      <div class="section-heading"><div><p class="eyebrow">Impacto colectivo</p><h2 id="impact-title">Construido por la comunidad</h2><p>Personas voluntarias creando espacios donde aprender y conectar durante todo el año.</p></div></div>
+      <div class="impact-grid">
+        <article class="impact-card"><strong>{groupCount}</strong><p>AWS User Groups conectando comunidades locales.</p></article>
+        <article class="impact-card"><strong>10k+</strong><p>Miembros compartiendo experiencia y conocimiento.</p></article>
+        <article class="impact-card"><strong>{communityDayEditions.length}</strong><p>Ediciones del AWS Community Day Spain desde 2023.</p></article>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

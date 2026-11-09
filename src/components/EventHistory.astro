@@ -1,0 +1,154 @@
+---
+// Past events of one User Group, by year. Static HTML is the fallback; the
+// browser re-renders it from the live S3 snapshot so history stays current.
+import snapshot from '../data/events.json';
+import type { EventsSnapshot } from '../lib/types';
+import { pastEvents } from '../lib/events';
+import { eventPlace, historyByYear, shortDate, speakerNames, yearCaption } from '../lib/history';
+import { t, type Locale } from '../lib/i18n';
+
+interface Props {
+  groupId: string;
+  locale?: Locale;
+}
+
+const { groupId, locale = 'es' } = Astro.props;
+const years = historyByYear(pastEvents(snapshot as EventsSnapshot, new Date(), { groupId }));
+const snapshotUrl = import.meta.env.PUBLIC_EVENTS_SNAPSHOT_URL || '';
+const copy = {
+  noPast: t(locale, 'noPast'),
+  officialChannels: t(locale, 'officialChannels'),
+  date: t(locale, 'date'),
+  event: t(locale, 'event'),
+  place: t(locale, 'place'),
+  speakers: t(locale, 'speakers'),
+};
+---
+
+<event-history data-group-id={groupId} data-snapshot-url={snapshotUrl} data-locale={locale} data-copy={JSON.stringify(copy)}>
+  <div class="history-years" aria-live="polite">
+    {years.length === 0 ? (
+      <div class="empty-state">
+        <span aria-hidden="true">○</span>
+        <p><strong>{copy.noPast}</strong><br />{copy.officialChannels}</p>
+      </div>
+    ) : years.map(({ year, events }) => {
+      const showSpeakers = events.some((event) => event.speakers?.length);
+      const caption = yearCaption(year, events.length, locale);
+      return (
+        <div class="history-table-wrap" role="region" aria-label={caption} tabindex="0">
+          <table class="history-table">
+            <caption>{caption}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{copy.date}</th>
+                <th scope="col">{copy.event}</th>
+                <th scope="col">{copy.place}</th>
+                {showSpeakers && <th scope="col">{copy.speakers}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((event) => (
+                <tr>
+                  <td class="history-date"><time datetime={event.startDate}>{shortDate(event, locale)}</time></td>
+                  <td><a href={event.url} target="_blank" rel="noopener noreferrer">{event.title} <span aria-hidden="true">↗</span></a></td>
+                  <td>{eventPlace(event)}</td>
+                  {showSpeakers && <td>{speakerNames(event)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    })}
+  </div>
+</event-history>
+
+<script>
+  import { pastEvents } from '../lib/events';
+  import { eventPlace, historyByYear, shortDate, speakerNames, yearCaption } from '../lib/history';
+  import { loadSnapshot } from '../lib/snapshot-client';
+  import type { CommunityEvent } from '../lib/types';
+  import type { Locale } from '../lib/i18n';
+
+  const cell = (tag: 'td' | 'th', text: string, className?: string) => {
+    const element = document.createElement(tag);
+    element.textContent = text;
+    if (className) element.className = className;
+    if (tag === 'th') element.scope = 'col';
+    return element;
+  };
+
+  function historyTable(year: number, events: CommunityEvent[], locale: Locale, copy: Record<string, string>): HTMLElement {
+    const caption = yearCaption(year, events.length, locale);
+    const showSpeakers = events.some((event) => event.speakers?.length);
+    const wrap = document.createElement('div');
+    wrap.className = 'history-table-wrap';
+    wrap.setAttribute('role', 'region');
+    wrap.setAttribute('aria-label', caption);
+    wrap.tabIndex = 0;
+
+    const table = document.createElement('table');
+    table.className = 'history-table';
+    table.createCaption().textContent = caption;
+    const headings = [copy.date, copy.event, copy.place, ...(showSpeakers ? [copy.speakers] : [])];
+    table.createTHead().insertRow().append(...headings.map((heading) => cell('th', heading)));
+
+    const body = table.createTBody();
+    for (const event of events) {
+      const row = body.insertRow();
+      const date = cell('td', '', 'history-date');
+      const time = document.createElement('time');
+      time.dateTime = event.startDate;
+      time.textContent = shortDate(event, locale);
+      date.append(time);
+
+      const title = cell('td', '');
+      const link = document.createElement('a');
+      link.href = event.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const arrow = document.createElement('span');
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.textContent = '↗';
+      link.append(`${event.title} `, arrow);
+      title.append(link);
+
+      row.append(date, title, cell('td', eventPlace(event)));
+      if (showSpeakers) row.append(cell('td', speakerNames(event)));
+    }
+    wrap.append(table);
+    return wrap;
+  }
+
+  function emptyState(copy: Record<string, string>): HTMLElement {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '○';
+    const text = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = copy.noPast;
+    text.append(strong, document.createElement('br'), copy.officialChannels);
+    empty.append(icon, text);
+    return empty;
+  }
+
+  class EventHistory extends HTMLElement {
+    connectedCallback() {
+      const url = this.dataset.snapshotUrl;
+      if (!url) return;
+      const locale: Locale = this.dataset.locale === 'en' ? 'en' : 'es';
+      const copy = JSON.parse(this.dataset.copy ?? '{}') as Record<string, string>;
+      loadSnapshot(url).then((snapshot) => {
+        if (!snapshot) return;
+        const years = historyByYear(pastEvents(snapshot, new Date(), { groupId: this.dataset.groupId }));
+        this.querySelector('.history-years')?.replaceChildren(
+          ...(years.length ? years.map(({ year, events }) => historyTable(year, events, locale, copy)) : [emptyState(copy)]),
+        );
+      });
+    }
+  }
+  if (!customElements.get('event-history')) customElements.define('event-history', EventHistory);
+</script>

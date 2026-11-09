@@ -1,0 +1,86 @@
+---
+// Fixed, full-viewport Halloween atmosphere. Two layers:
+//  1. A pure-CSS night mood (deep glow, twinkling stars, drifting fog, vignette).
+//  2. Real figurative artwork (moon, bats, ghost, spider, cobweb, pumpkin,
+//     tombstone, dead tree) dropped into `.hw-assets`, positioned and animated
+//     via themes.css.
+// All artwork lives in /public/halloween as compact AVIFs. The whole block is
+// decorative (aria-hidden) and only shown under [data-theme="halloween"] via CSS.
+const asset = (file: string) => `${import.meta.env.BASE_URL}halloween/${file}`.replace(/\/{2,}/g, '/');
+---
+<div class="hw-atmo" aria-hidden="true">
+  <!-- Twinkling star field (pure CSS) -->
+  <div class="hw-atmo-stars">
+    <span style="top:12%;left:16%"></span><span style="top:22%;left:34%"></span>
+    <span style="top:9%;left:54%"></span><span style="top:30%;left:70%"></span>
+    <span style="top:16%;left:85%"></span><span style="top:40%;left:24%"></span>
+    <span style="top:52%;left:62%"></span><span style="top:14%;left:66%"></span>
+    <span style="top:46%;left:90%"></span><span style="top:28%;left:46%"></span>
+    <span style="top:7%;left:40%"></span><span style="top:36%;left:10%"></span>
+  </div>
+  <!-- Moving fog banks (blurred gradient layers) -->
+  <div class="hw-fog hw-fog-back"></div>
+  <div class="hw-fog hw-fog-front"></div>
+  <!-- Enveloping haze: a faint full-scene mist so nothing (moon clouds, edges)
+       reads as hard-cut. Very subtle, sits above the sky, below the figures. -->
+  <div class="hw-haze"></div>
+  <!-- Vignette to focus the eye and add dread -->
+  <div class="hw-vignette"></div>
+
+  <!-- Real figurative assets -->
+  <div class="hw-assets">
+    <img class="hw-moon" data-hw-src={asset('moon.avif')} alt="" width="512" height="512" loading="eager" fetchpriority="low" />
+    <img class="hw-cobweb" data-hw-src={asset('cobweb.avif')} alt="" width="512" height="512" loading="lazy" />
+    <!-- Tombstone: bottom-right graveyard prop. The epitaph ("R.I.P. us-east-1",
+         a community in-joke about AWS's perennial outage region) is engraved into
+         the artwork itself — no overlaid HTML text. -->
+    <div class="hw-tombstone-wrap">
+      <img class="hw-tombstone" data-hw-src={asset('tombstone.avif')} alt="" width="1254" height="1254" loading="lazy" />
+    </div>
+    <img class="hw-ghost" data-hw-src={asset('ghost-spectral.avif')} alt="" width="1312" height="1199" loading="lazy" />
+    <!-- Dead tree anchored at the bottom-left, like graveyard ground. -->
+    <img class="hw-tree" data-hw-src={asset('tree.avif')} alt="" width="1312" height="1199" loading="lazy" />
+    <!-- Carved pumpkin: sits in front of the tree, bobbing gently like the ghost. -->
+    <img class="hw-pumpkin" data-hw-src={asset('pumpkin.avif')} alt="" width="512" height="512" loading="lazy" />
+    <!-- Hanging spider: wrapper swings from the top. -->
+    <div class="hw-spider-wrap"><img class="hw-spider" data-hw-src={asset('spider.avif')} alt="" width="1312" height="1199" loading="lazy" /></div>
+    <!-- Flying bats: a flapping pair crossing the sky. Both frames stacked;
+         CSS cross-fades them for a wing-flap, the wrapper flies across. -->
+    <div class="hw-bat hw-bat-1">
+      <img class="hw-bat-frame hw-bat-frame-up" data-hw-src={asset('bat-up.avif')} alt="" width="512" height="512" loading="lazy" />
+      <img class="hw-bat-frame hw-bat-frame-down" data-hw-src={asset('bat-down.avif')} alt="" width="512" height="512" loading="lazy" />
+    </div>
+    <div class="hw-bat hw-bat-2">
+      <img class="hw-bat-frame hw-bat-frame-up" data-hw-src={asset('bat-up.avif')} alt="" width="512" height="512" loading="lazy" />
+      <img class="hw-bat-frame hw-bat-frame-down" data-hw-src={asset('bat-down.avif')} alt="" width="512" height="512" loading="lazy" />
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    function activateAssets() {
+      if (document.documentElement.getAttribute('data-theme') !== 'halloween') return false;
+      var activated = false;
+      document.querySelectorAll('[data-hw-src]').forEach(function (image) {
+        var src = image.getAttribute('data-hw-src');
+        if (!src) return;
+        image.setAttribute('src', src);
+        image.removeAttribute('data-hw-src');
+        activated = true;
+      });
+      return activated;
+    }
+
+    activateAssets();
+    var observer = new MutationObserver(function () {
+      if (activateAssets()) observer.disconnect();
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+      childList: true,
+      subtree: true,
+    });
+  })();
+</script>

@@ -1,0 +1,44 @@
+---
+import ThemeSelector from './ThemeSelector.astro';
+import { localizedPath, switchLocalePath, t, type Locale } from '../lib/i18n';
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = 'es' } = Astro.props;
+const language = locale === 'es' ? 'en' : 'es';
+---
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <a class="brand brand-light" href={localizedPath(locale, '/')}>
+        <svg class="brand-mark" viewBox="0 0 42 42" aria-hidden="true">
+          <circle cx="21" cy="21" r="18" fill="none" stroke="currentColor" stroke-width="2" />
+          <circle cx="13" cy="19" r="3" /><circle cx="27" cy="13" r="3" /><circle cx="29" cy="28" r="3" />
+          <path d="M15.7 17.5 24.2 14M15.5 21l11 5.5M27.5 16l1 9" fill="none" stroke="currentColor" stroke-width="2" />
+        </svg>
+        <span><strong>AWS Community</strong><small>Spain</small></span>
+      </a>
+      <p>{t(locale, 'footerTagline')}</p>
+      <ThemeSelector locale={locale} />
+    </div>
+    <div>
+      <h2>{t(locale, 'footerExplore')}</h2>
+      <a href={localizedPath(locale, '/events')}>{t(locale, 'footerUpcoming')}</a>
+      <a href={localizedPath(locale, '/user-groups')}>{t(locale, 'footerGroups')}</a>
+      <a href={localizedPath(locale, '/community-day')}>{t(locale, 'navCommunityDay')}</a>
+    </div>
+    <div>
+      <h2>{t(locale, 'footerCommunity')}</h2>
+      <a href="mailto:hello@awscommunity.es">{t(locale, 'footerContact')}</a>
+      <a href="https://www.linkedin.com/company/awscommspain/" rel="me noreferrer">LinkedIn</a>
+      <a href="https://www.youtube.com/@AWSCommunitySpain" rel="me noreferrer">YouTube</a>
+      <a class="footer-language" href={switchLocalePath(Astro.url.pathname, language)}>{language === 'en' ? 'Español' : 'English'}</a>
+    </div>
+  </div>
+  <div class="container footer-bottom">
+    <a class="footer-copyright" href={localizedPath(locale, '/about')}>© {new Date().getFullYear()} AWS Community Spain</a>
+    <span>{t(locale, 'footerIndependent')}</span>
+  </div>
+</footer>

@@ -1,0 +1,64 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import EventsList from '../../components/EventsList.astro';
+import EventHistory from '../../components/EventHistory.astro';
+import { userGroups } from '../../../config/user-groups';
+import type { UserGroup } from '../../lib/types';
+
+export function getStaticPaths() {
+  return userGroups.map((group) => ({ params: { id: group.id }, props: { group } }));
+}
+
+interface Props {
+  group: UserGroup;
+}
+
+const { group } = Astro.props;
+const location = group.city === group.region ? group.city : `${group.city}, ${group.region}`;
+const description = group.description
+  ?? `Comunidad local de AWS en ${location}. Consulta sus canales oficiales para conocer actividades y próximas convocatorias.`;
+---
+
+<BaseLayout title={group.name} description={`Próximos eventos e historial de actividad de ${group.name}.`}>
+  <header class="page-header">
+    <div class="container">
+      <a class="back-link" href={`/user-groups/#${group.id}`}>← Todos los User Groups</a>
+      <p class="eyebrow">{group.region}</p>
+      <h1>{group.name}</h1>
+      <p class="group-page-location">{group.city}</p>
+      <p class="group-page-description">{description}</p>
+      <div class="group-links">
+        <a href={group.website} target="_blank" rel="noopener noreferrer">Web oficial ↗</a>
+        {group.meetupUrl && <a href={group.meetupUrl} target="_blank" rel="noopener noreferrer">Meetup ↗</a>}
+        {Object.entries(group.socialLinks ?? {}).map(([network, url]) => (
+          <a href={url} target="_blank" rel="noopener noreferrer">{network}</a>
+        ))}
+      </div>
+    </div>
+  </header>
+
+  <section class="section section-soft" aria-labelledby="upcoming-heading">
+    <div class="container">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Agenda</p>
+          <h2 id="upcoming-heading">Próximos eventos</h2>
+        </div>
+      </div>
+      <EventsList groupId={group.id} />
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="history-heading">
+    <div class="container">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Historial</p>
+          <h2 id="history-heading">Eventos anteriores</h2>
+          <p>Eventos ya celebrados, tal y como figuran en sus páginas públicas. Solo se muestran eventos verificados.</p>
+        </div>
+      </div>
+      <EventHistory groupId={group.id} />
+    </div>
+  </section>
+</BaseLayout>

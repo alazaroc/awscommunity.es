@@ -1,0 +1,228 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Event discovery and moderation backend for AWS Community Spain
+
+Parameters:
+  DiscoverySchedule:
+    Type: String
+    Default: cron(0 21 * * ? *)
+    Description: EventBridge Scheduler expression, evaluated in Europe/Madrid
+  BackfillFrom:
+    Type: String
+    Default: '2026-01-01'
+    AllowedPattern: '^\d{4}-\d{2}-\d{2}$'
+  SiteOrigin:
+    Type: String
+    Default: https://awscommunity.es
+    Description: Public website origin allowed to fetch the snapshot (custom domain or CloudFront domain)
+  AlertEmail1:
+    Type: String
+    Default: ''
+    NoEcho: true
+  AlertEmail2:
+    Type: String
+    Default: ''
+    NoEcho: true
+  AlertEmail3:
+    Type: String
+    Default: ''
+    NoEcho: true
+  AlertEmail4:
+    Type: String
+    Default: ''
+    NoEcho: true
+  AlertEmail5:
+    Type: String
+    Default: ''
+    NoEcho: true
+
+Conditions:
+  HasAlertEmail1: !Not [!Equals [!Ref AlertEmail1, '']]
+  HasAlertEmail2: !Not [!Equals [!Ref AlertEmail2, '']]
+  HasAlertEmail3: !Not [!Equals [!Ref AlertEmail3, '']]
+  HasAlertEmail4: !Not [!Equals [!Ref AlertEmail4, '']]
+  HasAlertEmail5: !Not [!Equals [!Ref AlertEmail5, '']]
+
+Resources:
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+
+  AlertEmailSubscription1:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail1
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail1
+
+  AlertEmailSubscription2:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail2
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail2
+
+  AlertEmailSubscription3:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail3
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail3
+
+  AlertEmailSubscription4:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail4
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail4
+
+  AlertEmailSubscription5:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail5
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail5
+
+  SnapshotBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [GET, HEAD]
+            AllowedOrigins:
+              - !Ref SiteOrigin
+              - http://localhost:4321
+            AllowedHeaders: ['*']
+            MaxAge: 3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  SnapshotReadPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SnapshotBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadEventsSnapshot
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${SnapshotBucket.Arn}/events.json'
+
+  DiscoveryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../
+      Handler: backend/handlers/discover.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 300
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTable
+          SNAPSHOT_BUCKET: !Ref SnapshotBucket
+          ALERT_TOPIC_ARN: !Ref AlertsTopic
+          BACKFILL_FROM: !Ref BackfillFrom
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - S3WritePolicy:
+            BucketName: !Ref SnapshotBucket
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt AlertsTopic.TopicName
+      Events:
+        DiscoverySchedule:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: !Ref DiscoverySchedule
+            ScheduleExpressionTimezone: Europe/Madrid
+            FlexibleTimeWindow:
+              Mode: 'OFF'
+            Input: '{"mode":"daily"}'
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - backend/handlers/discover.ts
+        Minify: true
+        Sourcemap: true
+        Target: es2022
+
+  AdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../
+      Handler: backend/handlers/admin.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 120
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTable
+          SNAPSHOT_BUCKET: !Ref SnapshotBucket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventsTable
+        - S3WritePolicy:
+            BucketName: !Ref SnapshotBucket
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - backend/handlers/admin.ts
+        Minify: true
+        Sourcemap: true
+        Target: es2022
+
+Outputs:
+  SnapshotUrl:
+    Description: Public event snapshot URL used by the static website
+    Value: !Sub 'https://${SnapshotBucket}.s3.${AWS::Region}.amazonaws.com/events.json'
+  SnapshotBucketName:
+    Value: !Ref SnapshotBucket
+  AlertsTopicArn:
+    Value: !Ref AlertsTopic
+  EventsTableName:
+    Value: !Ref EventsTable
+  DiscoveryFunctionName:
+    Value: !Ref DiscoveryFunction
+  AdminFunctionName:
+    Value: !Ref AdminFunction

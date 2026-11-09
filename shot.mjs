@@ -1,0 +1,12 @@
+import { chromium } from '@playwright/test';
+const url = process.argv[2] || 'http://localhost:4321/?theme=kiroween';
+const out = process.argv[3] || '/tmp/hw-shot.png';
+const scrollY = Number(process.argv[4] || 0);
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto(url, { waitUntil: 'networkidle' });
+if (scrollY) await page.evaluate((y) => window.scrollTo(0, y), scrollY);
+await page.waitForTimeout(900);
+await page.screenshot({ path: out });
+await browser.close();
+console.log('saved', out);

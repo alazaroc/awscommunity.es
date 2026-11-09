@@ -1,0 +1,47 @@
+---
+import { localizedPath, switchLocalePath, t, type Locale } from '../lib/i18n';
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = 'es' } = Astro.props;
+const currentPath = Astro.url.pathname;
+const links = [
+  { href: '/events', label: t(locale, 'navEvents') },
+  { href: '/user-groups', label: t(locale, 'navGroups') },
+  { href: '/community-day', label: t(locale, 'navCommunityDay') },
+];
+const language = locale === 'es' ? 'en' : 'es';
+---
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href={localizedPath(locale, '/')} aria-label={t(locale, 'homeLabel')}>
+      <svg class="brand-mark" viewBox="0 0 42 42" aria-hidden="true">
+        <circle cx="21" cy="21" r="18" fill="none" stroke="currentColor" stroke-width="2" />
+        <circle cx="13" cy="19" r="3" />
+        <circle cx="27" cy="13" r="3" />
+        <circle cx="29" cy="28" r="3" />
+        <path d="M15.7 17.5 24.2 14M15.5 21l11 5.5M27.5 16l1 9" fill="none" stroke="currentColor" stroke-width="2" />
+      </svg>
+      <span><strong>AWS Community</strong><small>Spain</small></span>
+    </a>
+    <nav class="desktop-nav" aria-label={t(locale, 'navEvents')}>
+      {links.map((link) => {
+        const href = localizedPath(locale, link.href);
+        return <a href={href} aria-current={currentPath === href || currentPath.startsWith(`${href}/`) ? 'page' : undefined}>{link.label}</a>;
+      })}
+      <a class="language-link" href={switchLocalePath(currentPath, language)} aria-label={`${t(locale, 'languageLabel')}: ${language === 'en' ? t(locale, 'languageEnglish') : t(locale, 'languageSpanish')}`}>
+        {language === 'en' ? 'EN' : 'ES'}
+      </a>
+    </nav>
+    <details class="mobile-nav">
+      <summary aria-label={t(locale, 'mobileMenu')}><span></span><span></span><span></span></summary>
+      <nav aria-label={t(locale, 'navEvents')}>
+        {links.map((link) => <a href={localizedPath(locale, link.href)}>{link.label}</a>)}
+        <a href={switchLocalePath(currentPath, language)}>{language === 'en' ? 'English' : 'Español'}</a>
+      </nav>
+    </details>
+  </div>
+</header>
