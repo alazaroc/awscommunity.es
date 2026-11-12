@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CommunityDayPromo from '../../components/CommunityDayPromo.astro';
+import { communityDayEditions } from '../../../config/community-day';
+import { t } from '../../lib/i18n';
+---
+
+<BaseLayout locale="en" title="AWS Community Day Spain" description="A permanent index of AWS Community Day Spain editions.">
+  <header class="page-header">
+    <div class="container">
+      <p class="eyebrow">Our annual gathering</p>
+      <h1>AWS Community Day Spain</h1>
+      <p>A one-day technical conference organised by volunteers and led by the community. Each edition has its own independent website.</p>
+    </div>
+  </header>
+  <CommunityDayPromo variant="block" showCta={false} locale="en" />
+  <section class="section section-soft" aria-labelledby="history-title">
+    <div class="container">
+      <div class="section-heading"><div><p class="eyebrow">Archive since 2023</p><h2 id="history-title">Previous editions</h2><p>Revisit each edition on its independent website.</p></div></div>
+      <div class="editions-list">
+        {communityDayEditions.map((edition, index) => (
+          <a class="edition-row" href={edition.url} target="_blank" rel="noopener noreferrer">
+            <strong>{edition.year}</strong>
+            <span>{edition.location}{index === 0 ? ` · ${t('en', 'latestEdition')}` : ''}</span>
+            <b>{t('en', 'visitWebsite')} ↗</b>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

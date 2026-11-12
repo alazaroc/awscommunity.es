@@ -1,0 +1,133 @@
+---
+import { localizedPath, t, type Locale } from '../lib/i18n';
+import { userGroups } from '../../config/user-groups';
+import { projectMapCoordinates } from '../lib/map';
+
+interface Props {
+  id?: string;
+  activeGroupIds?: string[];
+  freshGroupIds?: string[];
+  showLegend?: boolean;
+  locale?: Locale;
+}
+const {
+  id = 'spain-map',
+  activeGroupIds = [],
+  freshGroupIds = [],
+  showLegend = false,
+  locale = 'es',
+} = Astro.props;
+const activeSet = new Set(activeGroupIds);
+const freshSet = new Set(freshGroupIds);
+
+const nodes = userGroups.flatMap((group) => {
+  if (!group.coordinates) return [];
+  return [{ ...group, ...projectMapCoordinates(group.coordinates) }];
+});
+const nodesById = new Map(nodes.map((node) => [node.id, node]));
+const connectionPairs = [
+  ['galicia', 'asturias'],
+  ['asturias', 'bilbao'],
+  ['bilbao', 'zaragoza'],
+  ['zaragoza', 'barcelona'],
+  ['madrid', 'zaragoza'],
+  ['madrid', 'valencia'],
+  ['valencia', 'alicante'],
+  ['madrid', 'sevilla'],
+  ['sevilla', 'malaga'],
+  ['valencia', 'palma'],
+  ['sevilla', 'las-palmas'],
+];
+const connections = connectionPairs.flatMap(([fromId, toId]) => {
+  const from = nodesById.get(fromId);
+  const to = nodesById.get(toId);
+  return from && to ? [{ from, to }] : [];
+});
+const nodeLabel = (node: (typeof nodes)[number]) => {
+  const statuses = [
+    activeSet.has(node.id) ? t(locale, 'mapUpcoming') : '',
+    freshSet.has(node.id) ? t(locale, 'mapFresh') : '',
+  ].filter(Boolean);
+  const base = t(locale, 'viewGroup', { name: node.name });
+  return statuses.length ? `${base} · ${statuses.join(' · ')}` : base;
+};
+---
+
+<figure class="spain-map" id={id}>
+  <svg viewBox="0 0 680 500" role="group" aria-labelledby={`${id}-title ${id}-desc`}>
+    <title id={`${id}-title`}>{t(locale, 'mapTitle')}</title>
+    <desc id={`${id}-desc`}>{t(locale, 'mapDescription', { count: nodes.length })}</desc>
+    <defs>
+      <filter id={`${id}-glow`}><feGaussianBlur stdDeviation="5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+    </defs>
+
+    <!-- Simplified from Natural Earth 1:50m public-domain boundary data. -->
+    <g aria-hidden="true">
+      <path class="map-land" transform="matrix(.660714 0 0 1 121.9643 0)" d="M358.2 82.3L358.3 83.5L359.9 85.2L361.5 85.8L364.9 86.6L367.5 86.8L371.1 87.1L373.6 88.1L373.7 89.6L373.1 91.2L371.6 92.8L370.8 93.9L371.6 94.6L372.8 95.1L374.2 95.3L375.2 95.1L375.9 94.2L377.2 93.0L378.0 92.9L377.9 93.5L378.6 94.3L383.0 95.7L392.6 98.1L396.4 98.2L399.5 98.5L400.4 99.5L406.5 103.3L408.0 103.2L410.8 103.3L414.1 103.0L416.5 102.3L418.0 102.4L419.8 103.1L421.8 103.8L424.4 105.0L426.7 106.6L428.4 107.1L438.1 106.1L440.2 107.0L442.5 107.0L445.1 106.7L450.7 107.2L455.3 107.1L455.7 106.7L456.1 103.3L456.8 102.0L457.9 101.7L460.6 102.0L470.4 104.0L474.4 105.3L478.3 106.3L481.7 106.4L484.0 107.0L487.1 110.3L486.6 112.0L486.9 112.6L487.2 113.7L487.1 115.0L488.0 115.8L489.4 115.9L491.4 115.6L493.5 115.1L497.1 113.7L498.2 113.5L504.4 115.1L507.1 116.2L508.1 117.3L509.5 118.5L511.3 118.7L513.9 117.5L518.0 116.3L525.0 117.4L532.7 118.9L536.1 119.1L536.2 118.4L536.8 117.3L538.1 116.8L540.0 116.6L542.6 116.1L545.7 115.1L548.8 114.8L552.1 115.4L556.1 116.0L558.5 116.0L559.6 118.2L561.5 119.0L562.3 120.9L558.7 121.9L556.7 122.0L556.0 125.3L557.0 126.2L559.0 127.0L559.5 128.0L559.9 132.8L555.9 135.7L550.2 138.9L522.4 149.3L515.8 154.3L513.3 155.4L492.7 158.6L478.2 162.0L471.3 163.2L462.7 169.1L458.6 171.5L461.8 172.1L465.6 174.9L464.4 176.2L458.8 178.1L456.4 178.7L455.1 178.4L453.8 178.6L444.5 188.8L436.3 196.2L431.7 199.3L427.0 204.1L416.9 216.4L416.8 219.9L421.8 232.2L424.6 235.4L428.6 238.1L436.2 240.4L438.1 242.6L435.5 244.8L427.9 248.6L414.8 253.8L409.2 257.9L408.0 261.8L404.1 263.6L402.7 269.1L400.3 272.7L399.9 274.0L397.4 276.7L397.1 278.7L401.1 281.5L399.1 282.7L397.1 283.2L392.5 283.6L376.9 283.9L364.4 289.9L358.1 295.2L352.4 305.1L345.5 311.0L342.5 312.1L337.8 309.5L331.9 309.1L326.2 309.9L323.2 312.0L318.5 313.1L313.9 312.1L304.0 311.6L299.6 311.7L292.8 313.3L286.8 312.2L276.9 311.7L255.3 313.0L252.6 313.6L249.9 316.1L243.0 320.3L232.6 320.4L223.1 323.1L220.8 324.9L216.8 329.6L215.6 333.1L214.7 333.1L213.7 332.3L212.3 332.6L211.5 335.2L207.9 336.4L205.0 336.9L197.7 334.7L191.6 331.5L188.4 331.3L183.2 326.2L180.9 323.1L179.4 319.6L179.7 318.3L179.2 317.2L174.6 315.8L173.5 312.6L176.9 308.5L179.6 306.8L181.3 306.3L177.2 306.4L174.2 309.1L170.3 304.8L154.6 296.6L155.6 294.7L155.4 293.7L152.8 295.9L151.0 296.4L143.0 296.1L133.8 297.1L131.3 288.5L130.2 285.2L129.9 283.1L132.2 278.2L134.8 276.2L138.3 272.0L142.6 268.6L147.1 267.8L149.1 267.3L150.8 264.6L151.7 262.3L151.0 262.1L145.7 262.6L136.3 253.0L136.6 251.5L137.8 249.2L138.5 246.4L138.7 244.2L141.2 242.2L145.0 240.3L148.2 237.5L149.8 234.8L150.1 232.4L148.3 230.6L143.1 229.6L137.8 222.7L136.6 218.3L135.5 217.8L132.2 215.8L129.0 212.1L128.6 211.5L131.8 210.8L145.3 210.8L148.1 210.0L148.5 209.7L151.0 206.8L153.6 202.0L154.2 199.1L153.3 197.9L148.9 194.9L148.7 194.0L149.4 192.6L152.1 191.2L155.6 189.5L157.6 188.0L157.1 186.9L156.1 185.7L155.9 184.5L156.6 183.2L156.8 178.5L157.3 177.3L156.6 173.0L155.7 169.5L152.9 165.0L153.4 164.0L154.7 163.2L159.0 161.6L162.4 157.9L167.4 154.9L173.9 152.4L178.4 149.7L180.2 147.6L181.5 147.0L181.1 146.0L180.3 144.6L177.7 143.2L174.3 142.4L170.6 142.4L168.3 142.2L167.6 141.1L167.9 138.1L167.7 135.2L167.0 133.9L165.3 132.8L161.9 133.1L158.9 132.3L156.7 132.1L155.4 132.7L148.8 132.6L146.0 132.1L144.1 131.5L142.9 131.8L142.2 132.4L142.1 133.3L141.6 134.5L139.3 135.5L133.9 136.6L129.5 136.5L125.5 135.8L124.2 135.2L122.3 134.7L114.1 135.3L113.2 134.9L110.4 136.0L106.2 137.3L103.9 137.3L103.1 137.1L102.7 136.5L101.0 134.5L101.5 133.4L104.8 130.2L104.4 129.5L103.1 128.5L101.8 127.0L101.5 126.3L99.4 126.1L97.1 126.9L88.5 128.5L86.4 129.0L82.7 130.6L78.9 132.9L75.9 133.4L74.9 132.7L74.5 127.2L79.1 123.6L82.4 121.4L80.8 121.0L77.4 121.0L77.6 119.3L79.2 118.5L80.8 116.7L79.0 115.9L77.5 114.7L77.6 111.5L78.0 110.2L77.5 108.8L70.5 110.7L68.7 110.4L68.6 108.0L72.5 104.4L72.9 103.3L68.3 102.8L64.9 101.0L62.8 99.4L60.6 97.2L60.6 95.1L62.9 90.4L66.2 89.0L69.0 88.1L75.1 84.8L83.4 85.5L88.5 84.8L93.1 83.1L95.8 82.7L100.0 81.2L99.9 79.2L98.4 77.8L99.7 76.4L104.5 74.7L109.8 72.4L115.9 72.0L122.1 70.0L126.2 71.3L129.9 70.9L134.0 72.4L139.5 75.9L147.6 77.3L154.0 76.2L165.3 76.0L171.0 76.4L181.0 75.6L186.8 75.9L196.1 74.1L203.4 76.3L217.4 77.3L225.8 79.1L249.1 82.0L257.5 82.1L269.4 80.4L274.4 79.2L279.0 79.9L285.8 78.5L289.1 78.8L293.3 80.8L308.2 83.6L312.1 81.2L315.0 80.7L325.7 82.1L336.5 85.1L342.1 85.3L350.3 84.5L356.9 82.6L358.2 82.3Z" />
+      <path class="map-land island" transform="matrix(.660714 0 0 1 121.9643 0)" d="M493.8 245.6L492.8 246.1L490.2 245.7L486.2 245.7L486.1 244.3L486.7 243.3L487.5 242.3L489.9 244.2L493.7 244.6L493.8 245.6ZM555.8 207.1L559.6 208.2L563.7 207.2L565.8 207.5L568.0 208.1L568.5 210.2L566.6 212.7L563.9 215.1L561.7 217.9L559.8 221.0L556.2 222.8L552.9 223.9L546.0 221.6L542.0 221.0L540.8 220.2L539.8 216.7L538.0 215.6L535.4 215.1L533.0 216.0L530.0 217.8L528.4 216.0L525.8 215.7L524.8 214.6L524.9 213.2L541.4 204.8L546.2 203.0L556.3 200.8L557.9 201.2L556.6 202.4L556.7 203.0L557.9 203.6L557.6 204.6L556.3 205.5L555.8 207.1ZM601.7 205.3L601.0 205.7L588.7 201.7L584.7 201.3L583.7 200.6L583.8 198.6L584.1 197.7L592.4 197.2L599.0 198.7L602.6 202.7L602.9 203.4L601.7 205.3ZM487.8 237.1L486.4 239.2L480.3 238.5L478.9 237.6L480.3 235.2L482.0 234.9L482.1 233.2L483.9 231.5L492.6 230.1L494.5 231.3L494.9 233.0L489.8 236.6L487.8 237.1Z" />
+      <rect class="map-inset" x="65" y="390" width="185" height="85" rx="12" />
+      <text class="map-inset-label" x="75" y="404">CANARIAS</text>
+      <path class="map-land island" transform="matrix(.778947 0 0 1 29.3421 0)" d="M136.8 437.3L133.8 444.6L130.9 447.5L129.2 448.5L125.0 449.3L120.0 444.7L117.4 440.1L116.0 438.6L118.2 437.4L121.6 437.6L128.7 436.6L130.1 436.2L137.4 431.5L144.5 430.9L144.7 432.5L136.8 437.3ZM232.5 420.1L230.0 422.3L227.2 421.5L228.6 416.8L229.9 415.5L234.9 413.4L239.1 412.6L240.3 410.5L241.7 409.6L243.2 410.9L242.1 412.4L241.2 417.1L238.4 418.6L232.5 420.1ZM214.9 444.0L210.0 447.7L205.0 446.8L204.1 446.2L209.1 445.3L213.6 442.5L216.5 436.4L221.1 429.6L222.0 426.7L223.8 425.6L226.3 425.5L227.3 425.7L228.4 427.2L228.4 430.6L227.1 436.3L224.7 441.3L214.9 444.0ZM170.9 444.8L170.7 447.2L171.6 449.7L171.4 453.5L169.6 455.6L165.1 457.7L161.6 457.3L159.6 456.5L156.1 453.1L156.0 449.7L159.2 447.4L160.6 444.5L169.0 445.1L169.8 444.5L170.4 444.4L170.9 444.8ZM105.8 448.8L104.3 449.1L102.5 448.3L100.6 445.7L101.9 443.8L103.1 443.0L104.7 443.1L107.8 444.5L108.7 445.9L108.8 446.8L105.8 448.8ZM80.1 455.6L76.5 460.9L72.1 458.9L71.0 458.3L70.1 457.2L74.4 457.0L78.7 454.3L80.1 455.6ZM82.0 433.6L81.1 433.8L80.3 431.3L75.9 425.1L78.6 422.3L83.4 422.2L85.3 424.2L86.0 426.2L85.0 427.3L85.3 429.7L84.8 431.2L82.0 433.6Z" />
+    </g>
+
+    <g class="connections" aria-hidden="true">
+      {connections.map(({ from, to }) => <path d={`M${from.x.toFixed(1)} ${from.y.toFixed(1)}L${to.x.toFixed(1)} ${to.y.toFixed(1)}`} />)}
+    </g>
+    <g class="map-nodes">
+      {nodes.map((node) => (
+        <a
+          class:list={['map-node', { 'has-event': activeSet.has(node.id), 'is-fresh': freshSet.has(node.id) }]}
+          href={localizedPath(locale, `/user-groups#${node.id}`)}
+          aria-label={nodeLabel(node)}
+          data-group-id={node.id}
+        >
+          <g transform={`translate(${node.x.toFixed(1)} ${node.y.toFixed(1)})`}>
+            <circle class="node-hit" r="20" />
+            <circle class="fresh-wave" r="10" />
+            <circle class="pulse" r="15" />
+            <circle class="node-ring" r="10" />
+            <circle class="node-dot" r="6" style={`filter:url(#${id}-glow)`} />
+            <g class="map-tooltip" aria-hidden="true">
+              <rect x="-130" y="-60" width="260" height="44" rx="10" />
+              <path d="M-7 -17L0 -9L7 -17Z" />
+              <text x="0" y="-33">{node.name}</text>
+            </g>
+          </g>
+        </a>
+      ))}
+    </g>
+  </svg>
+  {showLegend && (
+    <figcaption class="map-legend">
+      <span class="map-legend-title">{t(locale, 'mapSignals')}</span>
+      <span class="map-legend-item"><i class="map-legend-dot map-legend-group"></i>{t(locale, 'mapGroup')}</span>
+      <span class="map-legend-item"><i class="map-legend-dot map-legend-event"></i>{t(locale, 'mapUpcoming')}</span>
+      <span class="map-legend-item"><i class="map-legend-dot map-legend-fresh"></i>{t(locale, 'mapFresh')}</span>
+      <span class="map-legend-status" aria-live="polite">
+        {freshSet.size > 0
+          ? t(locale, freshSet.size === 1 ? 'mapNewSignalOne' : 'mapNewSignalMany', { count: freshSet.size })
+          : t(locale, 'mapNoNewSignals')}
+      </span>
+    </figcaption>
+  )}
+</figure>
+
+<script>
+  import { freshlyDiscoveredGroupIds, upcomingGroupIds } from '../lib/events';
+  import type { EventsSnapshot } from '../lib/types';
+
+  const syncMapSignals = (snapshot: EventsSnapshot) => {
+    const active = new Set(upcomingGroupIds(snapshot));
+    const fresh = new Set(freshlyDiscoveredGroupIds(snapshot));
+    for (const node of document.querySelectorAll<SVGAElement>('.map-node[data-group-id]')) {
+      const id = node.dataset.groupId ?? '';
+      node.classList.toggle('has-event', active.has(id));
+      node.classList.toggle('is-fresh', fresh.has(id));
+    }
+  };
+
+  window.addEventListener('events-snapshot-updated', (event) => {
+    const snapshot = (event as CustomEvent<EventsSnapshot>).detail;
+    if (snapshot) syncMapSignals(snapshot);
+  });
+</script>

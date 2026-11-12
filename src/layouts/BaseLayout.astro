@@ -1,0 +1,195 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import HalloweenAtmosphere from '../components/HalloweenAtmosphere.astro';
+import SeasonalAtmosphere from '../components/SeasonalAtmosphere.astro';
+import { communityDay } from '../../config/community-day';
+import { THEMES, THEME_ALIASES, DEFAULT_THEME, COMMUNITY_DAY_MARGIN_BEFORE, COMMUNITY_DAY_MARGIN_AFTER } from '../../config/themes';
+import { localizedPath, localeTag, switchLocalePath, t, type Locale } from '../lib/i18n';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  locale?: Locale;
+  schema?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const {
+  title,
+  description,
+  image = '/og-image.svg',
+  locale = 'es',
+  schema,
+} = Astro.props;
+const defaultTitle = 'AWS Community Spain';
+const defaultDescription = locale === 'en'
+  ? 'Discover events, AWS User Groups and activity from the AWS community in Spain.'
+  : 'Descubre eventos, AWS User Groups y actividad de la comunidad AWS en España.';
+const pageTitle = title ?? defaultTitle;
+const pageDescription = description ?? defaultDescription;
+const site = Astro.site ?? new URL(Astro.url.origin);
+const pathname = Astro.url.pathname;
+const canonical = new URL(pathname, site);
+const fullTitle = pageTitle === defaultTitle ? pageTitle : `${pageTitle} · AWS Community Spain`;
+const spanishUrl = new URL(switchLocalePath(pathname, 'es'), site).toString();
+const englishUrl = new URL(switchLocalePath(pathname, 'en'), site).toString();
+const schemaData = schema ?? {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Cloud Community Spain',
+      url: new URL('/', site).toString(),
+      email: 'hello@awscommunity.es',
+      description: 'Independent non-profit community supporting AWS User Groups and AWS community activities in Spain.',
+    },
+    {
+      '@type': 'WebSite',
+      name: 'AWS Community Spain',
+      url: new URL(localizedPath(locale, '/'), site).toString(),
+      inLanguage: localeTag(locale),
+      publisher: { '@type': 'Organization', name: 'Cloud Community Spain' },
+    },
+  ],
+};
+
+// Data for the inline theme resolver. Serialized at build time; the client script
+// runs before first paint and needs no module imports or network requests.
+const themeConfig = {
+  themes: THEMES.map((theme) => ({
+    name: theme.name,
+    kind: theme.windowKind ?? null,
+    start: theme.window?.start ?? null,
+    end: theme.window?.end ?? null,
+    priority: theme.priority,
+  })),
+  aliases: THEME_ALIASES,
+  fallback: DEFAULT_THEME,
+  communityDayDate: communityDay.date ?? null,
+  cdBefore: COMMUNITY_DAY_MARGIN_BEFORE,
+  cdAfter: COMMUNITY_DAY_MARGIN_AFTER,
+};
+---
+
+<!doctype html>
+<html lang={localeTag(locale)} data-theme="default">
+  <head>
+    <meta charset="UTF-8" />
+    <script is:inline define:vars={{ themeConfig }}>
+      // Resolve the seasonal theme before first paint. Priority: ?theme= / sessionStorage > date > default.
+      (function () {
+        try {
+          var cfg = themeConfig;
+          var aliases = cfg.aliases || {};
+          var valid = {};
+          cfg.themes.forEach(function (t) { valid[t.name] = true; });
+          Object.keys(aliases).forEach(function (a) { valid[a] = true; });
+
+          function normalize(raw) {
+            if (!raw) return null;
+            var token = String(raw).trim().toLowerCase();
+            if (!token || !valid[token]) return null;
+            return aliases[token] || token;
+          }
+
+          var params = new URLSearchParams(window.location.search);
+          var reset = params.get('theme') === 'auto';
+          var fromUrl = reset ? null : normalize(params.get('theme'));
+          var stored = null;
+          try { stored = reset ? null : window.sessionStorage.getItem('theme-override'); } catch (e) {}
+          if (reset) { try { window.sessionStorage.removeItem('theme-override'); } catch (e) {} }
+
+          var override = fromUrl || normalize(stored);
+          if (fromUrl) { try { window.sessionStorage.setItem('theme-override', fromUrl); } catch (e) {} }
+
+          function mdOrdinal(m, d) { return m * 100 + d; }
+          function madridYmd(date) {
+            var parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+            var get = function (type) { return Number((parts.find(function (p) { return p.type === type; }) || {}).value); };
+            return { year: get('year'), month: get('month'), day: get('day') };
+          }
+          function inFixed(ord, startMd, endMd) {
+            if (startMd <= endMd) return ord >= startMd && ord <= endMd;
+            return ord >= startMd || ord <= endMd;
+          }
+          function parseMd(v) { var p = v.split('-'); return mdOrdinal(Number(p[0]), Number(p[1])); }
+          function dayDiff(a, b) {
+            return Math.round((Date.UTC(a.year, a.month - 1, a.day) - Date.UTC(b.year, b.month - 1, b.day)) / 86400000);
+          }
+
+          function themeForDate(now) {
+            var ymd = madridYmd(now);
+            var ord = mdOrdinal(ymd.month, ymd.day);
+            var best = null;
+            cfg.themes.forEach(function (t) {
+              var active = false;
+              if (t.kind === 'fixed' && t.start && t.end) {
+                active = inFixed(ord, parseMd(t.start), parseMd(t.end));
+              } else if (t.kind === 'dynamic' && cfg.communityDayDate) {
+                var ev = new Date(cfg.communityDayDate);
+                if (!isNaN(ev.valueOf())) {
+                  var delta = dayDiff(ymd, madridYmd(ev));
+                  active = delta >= -cfg.cdBefore && delta <= cfg.cdAfter;
+                }
+              }
+              if (active && (!best || t.priority > best.priority)) best = t;
+            });
+            return best ? best.name : cfg.fallback;
+          }
+
+          var theme = override || themeForDate(new Date());
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          // On any failure keep the non-thematic default already on <html>.
+        }
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta id="theme-color" name="theme-color" content="#1f2d3d" />
+    <meta name="description" content={pageDescription} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" hreflang="es" href={spanishUrl} />
+    <link rel="alternate" hreflang="en" href={englishUrl} />
+    <link rel="alternate" hreflang="x-default" href={spanishUrl} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AWS Community Spain" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={pageDescription} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={locale === 'en' ? 'en_GB' : 'es_ES'} />
+    <meta property="og:locale:alternate" content={locale === 'en' ? 'es_ES' : 'en_GB'} />
+    <meta property="og:image" content={new URL(image, site)} />
+    <meta property="og:image:alt" content={fullTitle} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={pageDescription} />
+    <meta name="twitter:image" content={new URL(image, site)} />
+    <script type="application/ld+json" set:html={JSON.stringify(schemaData)}></script>
+    <script is:inline>
+      (function () {
+        var colors = { default: '#1f2d3d', halloween: '#0a0713', reinvent: '#0f1b2d', winter: '#eaf3fb', summer: '#fdf6ee', autumn: '#f6f1ea', christmas: '#f3f6f2', 'community-day': '#fff7ec' };
+        var theme = document.documentElement.getAttribute('data-theme') || 'default';
+        var meta = document.getElementById('theme-color');
+        if (meta) meta.setAttribute('content', colors[theme] || colors.default);
+      })();
+    </script>
+    <title>{fullTitle}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">{t(locale, 'skip')}</a>
+    <HalloweenAtmosphere />
+    <SeasonalAtmosphere />
+    <Header locale={locale} />
+    <main id="main-content">
+      <slot />
+    </main>
+    <Footer locale={locale} />
+  </body>
+</html>

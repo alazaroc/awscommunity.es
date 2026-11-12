@@ -1,0 +1,68 @@
+---
+import { t, type Locale } from '../lib/i18n';
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = 'es' } = Astro.props;
+const copy = {
+  next: t(locale, 'sectionNext'),
+  top: t(locale, 'sectionTop'),
+};
+---
+<a
+  class="section-navigator"
+  data-section-navigator
+  data-next-label={copy.next}
+  data-top-label={copy.top}
+  href="#home-upcoming"
+  aria-label={copy.next}
+>
+  <span aria-hidden="true">↓</span>
+  <span class="sr-only">{copy.next}</span>
+</a>
+
+<script>
+  const navigator = document.querySelector<HTMLElement>('[data-section-navigator]');
+  const sections = [...document.querySelectorAll<HTMLElement>('[data-home-section]')];
+
+  if (navigator && sections.length > 1) {
+    const label = navigator.querySelector<HTMLElement>('.sr-only');
+    const arrow = navigator.querySelector<HTMLElement>('[aria-hidden]');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+
+    const update = () => {
+      frame = 0;
+      const currentIndex = sections.reduce((index, section, candidateIndex) => (
+        section.getBoundingClientRect().top <= window.innerHeight * .35 ? candidateIndex : index
+      ), -1);
+      const target = sections[currentIndex + 1] ?? sections[0];
+      const isTop = target === sections[0];
+      const text = isTop ? navigator.dataset.topLabel : navigator.dataset.nextLabel;
+      navigator.setAttribute('href', `#${target.id}`);
+      navigator.setAttribute('aria-label', text ?? 'Navigate');
+      navigator.dataset.mode = isTop ? 'top' : 'next';
+      if (label) label.textContent = text ?? 'Navigate';
+      if (arrow) arrow.textContent = isTop ? '↑' : '↓';
+    };
+
+    const scheduleUpdate = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+
+    navigator.addEventListener('click', (event) => {
+      const targetId = navigator.getAttribute('href')?.slice(1);
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'start' });
+      window.history.replaceState(null, '', `#${targetId}`);
+    });
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+    reduceMotion.addEventListener?.('change', scheduleUpdate);
+    update();
+  }
+</script>

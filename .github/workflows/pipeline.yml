@@ -1,0 +1,109 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: "eu-west-1"
+  CI: true
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run check
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+
+  deploy-prod:
+    name: Deploy (prod)
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment:
+      name: production
+    # A deploy is never cancelled midway (CloudFormation).
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      AWS_ROLE: ${{ vars.AWS_ROLE_FOR_GITHUB_DEPLOYMENTS }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate required variables
+        run: |
+          set -e
+          if [[ -z "${AWS_ROLE}" ]]; then
+            echo "Missing required variable: AWS_ROLE (vars.AWS_ROLE_FOR_GITHUB_DEPLOYMENTS)"
+            exit 1
+          fi
+          echo "Environment OK."
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - uses: aws-actions/setup-sam@v3
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy website infrastructure
+        run: bash scripts/deploy.sh infrastructure
+      - name: Deploy backend
+        run: bash scripts/deploy.sh backend
+      # Ingest current events before building, so the static HTML ships them
+      # even on a first deploy.
+      - name: Run daily discovery
+        run: bash scripts/deploy.sh daily
+      - name: Build and publish website
+        run: bash scripts/deploy.sh site

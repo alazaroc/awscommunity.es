@@ -1,0 +1,48 @@
+---
+import { t, type Locale } from '../lib/i18n';
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = 'es' } = Astro.props;
+const options = [
+  { value: 'auto', key: 'themeAuto' },
+  { value: 'winter', key: 'themeWinter' },
+  { value: 'halloween', key: 'themeHalloween' },
+  { value: 'christmas', key: 'themeChristmas' },
+  { value: 'summer', key: 'themeSummer' },
+  { value: 'autumn', key: 'themeAutumn' },
+] as const;
+---
+<div class="theme-picker">
+  <label for="theme-selector">{t(locale, 'themeLabel')}</label>
+  <select id="theme-selector" data-theme-selector aria-label={t(locale, 'themeLabel')}>
+    {options.map((option) => <option value={option.value}>{t(locale, option.key)}</option>)}
+  </select>
+</div>
+
+<script is:inline>
+  (function () {
+    var select = document.querySelector('[data-theme-selector]');
+    if (!select) return;
+
+    var current = document.documentElement.getAttribute('data-theme') || 'default';
+    var raw = new URLSearchParams(window.location.search).get('theme');
+    var selected = raw && raw !== 'auto' ? raw.toLowerCase() : current;
+    if (!select.querySelector('option[value="' + selected + '"]')) selected = current;
+    if (!select.querySelector('option[value="' + selected + '"]')) selected = 'auto';
+    select.value = selected;
+
+    select.addEventListener('change', function () {
+      var url = new URL(window.location.href);
+      if (select.value === 'auto') {
+        try { window.sessionStorage.removeItem('theme-override'); } catch (e) {}
+        url.searchParams.delete('theme');
+      } else {
+        url.searchParams.set('theme', select.value);
+      }
+      window.location.assign(url.toString());
+    });
+  })();
+</script>

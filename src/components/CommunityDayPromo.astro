@@ -1,0 +1,72 @@
+---
+import { communityDay, communityDayEditions, getCommunityDayCtaUrl } from '../../config/community-day';
+import { communityDayCopy, localizedPath, localeTag, t, type Locale } from '../lib/i18n';
+
+interface Props {
+  variant?: 'block' | 'banner' | 'hero';
+  showEditionLinks?: boolean;
+  showCta?: boolean;
+  locale?: Locale;
+}
+
+const { variant = 'block', showEditionLinks = false, showCta = true, locale = 'es' } = Astro.props;
+const copy = communityDayCopy(locale, communityDay.status);
+const url = getCommunityDayCtaUrl();
+const isExternalUrl = url.startsWith('http');
+const Heading = variant === 'hero' ? 'h1' : 'h2';
+const latestEdition = communityDayEditions[0];
+const formattedDate = communityDay.date
+  ? new Intl.DateTimeFormat(localeTag(locale), { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Madrid' }).format(new Date(communityDay.date))
+  : undefined;
+---
+
+{variant === 'banner' ? (
+  <aside class="community-day-promo promo-banner" aria-label={`AWS Community Day Spain ${communityDay.year}`}>
+    <div class="container promo-banner-inner">
+      <div class="promo-banner-message">
+        <span>AWS Community Day Spain {communityDay.year}</span>
+        <strong>{copy.message}.</strong>
+      </div>
+      <nav class="promo-banner-actions" aria-label={t(locale, 'navCommunityDay')}>
+        <a href={localizedPath(locale, '/community-day')}>{locale === 'en' ? 'See updates' : 'Ver novedades'} →</a>
+        {latestEdition && (
+          <a href={latestEdition.url} target="_blank" rel="noopener noreferrer">
+            {locale === 'en' ? 'Relive' : 'Revive'} {latestEdition.location} {latestEdition.year} ↗
+          </a>
+        )}
+      </nav>
+    </div>
+  </aside>
+) : (
+  <section class:list={['community-day-promo', `promo-${variant}`]} aria-labelledby={`community-day-${variant}`}>
+    <div class="promo-grid container">
+      <div class="promo-copy">
+        <p class="eyebrow">{copy.eyebrow}</p>
+        <Heading id={`community-day-${variant}`}>AWS Community Day Spain <span>{communityDay.year}</span></Heading>
+        {(communityDay.location || formattedDate) && (
+          <p class="promo-meta">{communityDay.location}{communityDay.location && formattedDate && ' · '}{formattedDate}</p>
+        )}
+        <p>{copy.message}. {locale === 'en' ? 'The main annual gathering created by and for the AWS community in Spain.' : 'El principal encuentro anual creado por y para la comunidad AWS en España.'}</p>
+        {showCta && (
+          <a class="button button-accent" href={url} target={isExternalUrl ? '_blank' : undefined} rel={isExternalUrl ? 'noopener noreferrer' : undefined}>
+            {copy.cta} <span aria-hidden="true">{isExternalUrl ? '↗' : '→'}</span>
+          </a>
+        )}
+
+        {showEditionLinks && (
+          <nav class="promo-editions" aria-label={t(locale, 'previousEditions')}>
+            <strong>{t(locale, 'previousEditions')}</strong>
+            <div>
+              {communityDayEditions.map((edition) => (
+                <a href={edition.url} target="_blank" rel="noopener noreferrer">{edition.year} · {edition.location} ↗</a>
+              ))}
+            </div>
+          </nav>
+        )}
+      </div>
+      <div class="promo-art" aria-hidden="true">
+        <span>COMMUNITY</span><strong>DAY</strong><small>SPAIN · {communityDay.year}</small>
+      </div>
+    </div>
+  </section>
+)}
